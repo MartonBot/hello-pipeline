@@ -1,0 +1,81 @@
+---
+
+- hosts: automationservers
+  become: true
+
+  tasks:
+  
+    - name: Update apt
+      apt:
+        state: present
+        update_cache: yes
+
+    - name: Install Java 11
+      apt:
+        name: openjdk-11-jdk
+        update_cache: yes
+        
+    - name: Add Jenkins repository key
+      apt_key:
+        url: https://pkg.jenkins.io/debian/jenkins.io.key
+        state: present
+
+    - name: Add Jenkins repository to apt
+      apt_repository:
+        repo: deb http://pkg.jenkins.io/debian-stable binary/
+        filename: jenkins
+        state: present
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+      
+    - name: Setup Jenkins admin user and mark initial setup as complete
+      template:
+        src: templates/jenkins/basic-security.groovy.j2
+        dest: /var/lib/jenkins/basic-security.groovy
+        owner: jenkins
+        group: jenkins
+      notify:
+        - Restart Jenkins
+        - Delete user creation and skip setup script
+      
+    - name: Turn off Jenkins setup wizard
+      lineinfile:
+        dest: /etc/default/jenkins
+        regexp: '^JAVA_ARGS='
+        line: 'JAVA_ARGS="-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false"'
+      notify:
+        - Restart Jenkins
+      
+  handlers:
+  
+    - name: Restart Jenkins
+      service:
+        name: jenkins
+        state: restarted
+        
+    - name: Delete user creation and skip setup script
+      file:
+        path: /var/lib/jenkins/basic-security.groovy
+        state: absent
+
+- hosts: webservers
+
+  tasks:
+
+    - name: apache2 is at latest version
+      apt:
+        name: apache2
+        state: latest
+        update_cache: true
+      become: true
+
+    - name: apache2 is enabled and started
+      service:
+        name: apache2
+        enabled: yes
+        state: started
+      become: true
+      
+
