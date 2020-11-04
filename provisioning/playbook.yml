@@ -10,10 +10,18 @@
         state: present
         update_cache: yes
 
-    - name: Install Java 11
+    - name: Install Microsoft repository package
       apt:
-        name: openjdk-11-jdk
+        deb: https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb
+
+    - name: Install Java 11 and .NET Core 3.1
+      apt:
+        name: "{{ item.name }}"
         update_cache: yes
+      with_items:
+        - name: apt-transport-https
+        - name: openjdk-11-jdk
+        - name: dotnet-sdk-3.1
         
     - name: Add Jenkins repository key
       apt_key:
@@ -47,6 +55,34 @@
         line: 'JAVA_ARGS="-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false"'
       notify:
         - Restart Jenkins
+
+    - name: Start Jenkins
+      service:
+        name: jenkins
+        state: restarted
+
+    - name: Wait untils Jenkins web API is available
+      uri:
+        url: "http://localhost:8080/cli"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 5
+      delay: 10
+
+    - name: Install Jenkins plugins
+      community.general.jenkins_plugin:
+        name: "{{ item.name }}"
+        timeout: 120
+      with_items:
+        - name: git
+        - name: workflow-aggregator
+        - name: jackson2-api
+      notify:
+        - Restart Jenkins
+      retries: 5
+      delay: 10
+        
       
   handlers:
   
